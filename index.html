@@ -156,12 +156,12 @@
     
     <div class="form-group">
       <label for="searchWords">Search Words</label>
-      <textarea id="searchWords" rows="3" placeholder="Enter words, separated by commas..."></textarea>
+      <textarea id="searchWords" rows="3" placeholder="Enter words, separated by commas or new lines..."></textarea>
     </div>
     
     <div class="form-group">
       <label for="pagesToIgnore">Pages to Ignore</label>
-      <textarea id="pagesToIgnore" rows="2" placeholder="Enter page numbers to ignore, separated by commas (e.g., 1,2,3,15-20)..."></textarea>
+      <textarea id="pagesToIgnore" rows="2" placeholder="Enter page numbers to ignore, separated by commas or new lines (e.g., 1,2,3,15-20)..."></textarea>
     </div>
     
     <div class="form-group">
@@ -171,7 +171,7 @@
           <input type="number" id="skipPages" value="0" min="0">
         </div>
         <div class="settings-group">
-          <label for="maxResults">Max Results (How many results to show per word?)</label>
+          <label for="maxResults">Max Results (If it occurs more than this, it will show a message saying it occurs more than this)</label>
           <input type="number" id="maxResults" value="40" min="1">
         </div>
       </div>
@@ -207,7 +207,7 @@
       const pages = new Set();
       if (!pageString.trim()) return pages;
       
-      const parts = pageString.split(',').map(p => p.trim());
+      const parts = pageString.split(/[,\r\n]+/).map(p => p.trim());
       for (const part of parts) {
         if (part.includes('-')) {
           const [start, end] = part.split('-').map(n => parseInt(n.trim()));
@@ -238,7 +238,7 @@
       if (!fileInput.files.length) return alert("Please upload a PDF.");
 
       const file = fileInput.files[0];
-      const words = searchWordsInput.value.split(',').map(w => w.trim().toLowerCase()).filter(Boolean);
+      const words = searchWordsInput.value.split(/[,\r\n]+/).map(w => w.trim().toLowerCase()).filter(Boolean);
       const pagesToIgnore = parsePageNumbers(pagesToIgnoreInput.value);
       const skipPages = parseInt(skipPagesInput.value) || 0;
       const maxResults = parseInt(maxResultsInput.value) || 40;
@@ -251,9 +251,10 @@
         const pageWordMap = {};
         for (const word of words) pageWordMap[word] = [];
 
+        const wordCounts = {};
+        for (const word of words) wordCounts[word] = 0;
+        
         for (let i = skipPages; i < pdf.numPages; i++) {
-          if (Object.values(pageWordMap).flat().length >= maxResults) break;
-
           const actualPageNumber = i + 1;
           const adjustedPageNumber = actualPageNumber - skipPages;
           
@@ -265,7 +266,10 @@
 
           for (const word of words) {
             if (text.includes(word)) {
-              pageWordMap[word].push(adjustedPageNumber);
+              wordCounts[word]++;
+              if (pageWordMap[word].length < maxResults) {
+                pageWordMap[word].push(adjustedPageNumber);
+              }
             }
           }
         }
@@ -273,8 +277,14 @@
         let output = '';
         for (const word of words) {
           const ranges = mergeIntoRanges(pageWordMap[word]);
+          const totalCount = wordCounts[word];
+          
           if (ranges.length > 0) {
-            output += `${word} p.${ranges.join(', ')}\n`;
+            output += `${word} p.${ranges.join(', ')}`;
+            if (totalCount > maxResults) {
+              output += ` (Occurs more than ${maxResults} times)`;
+            }
+            output += '\n';
           }
         }
         resultsDiv.textContent = output || 'No matches found.';
