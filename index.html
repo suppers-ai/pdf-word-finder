@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Word Finder</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; max-width: 600px; }
+    textarea, input[type=file], button { width: 100%; margin: 0.5rem 0; }
+    #results { white-space: pre-wrap; background: #f9f9f9; padding: 1rem; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>PDF Word Finder</h1>
+  <input type="file" id="pdfFile" accept="application/pdf">
+  <textarea id="searchWords" rows="3" placeholder="Enter words, separated by commas..."></textarea>
+  <button onclick="processPDF()">Search PDF</button>
+  <div id="results"></div>
+
+  <script>
+    const MAX_RESULTS = 40;
+    const SKIP_PAGES = 12;
+
+    function mergeIntoRanges(pages) {
+      if (!pages.length) return [];
+      pages.sort((a, b) => a - b);
+      const ranges = [];
+      let start = pages[0], end = pages[0];
+      for (let i = 1; i < pages.length; i++) {
+        if (pages[i] === end + 1) {
+          end = pages[i];
+        } else {
+          ranges.push(start === end ? `${start}` : `${start}-${end}`);
+          start = end = pages[i];
+        }
+      }
+      ranges.push(start === end ? `${start}` : `${start}-${end}`);
+      return ranges;
+    }
+
+    async function processPDF() {
+      const fileInput = document.getElementById('pdfFile');
+      const searchWordsInput = document.getElementById('searchWords');
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.textContent = 'Processing...';
+
+      if (!fileInput.files.length) return alert("Please upload a PDF.");
+
+      const file = fileInput.files[0];
+      const words = searchWordsInput.value.split(',').map(w => w.trim().toLowerCase()).filter(Boolean);
+
+      const reader = new FileReader();
+      reader.onload = async function () {
+        const typedarray = new Uint8Array(this.result);
+        const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+
+        const pageWordMap = {};
+        for (const word of words) pageWordMap[word] = [];
+
+        for (let i = SKIP_PAGES; i < pdf.numPages; i++) {
+          if (Object.values(pageWordMap).flat().length >= MAX_RESULTS) break;
+
+          const page = await pdf.getPage(i + 1);
+          const textContent = await page.getTextContent();
+          const text = textContent.items.map(item => item.str).join(' ').toLowerCase();
+
+          for (const word of words) {
+            if (text.includes(word)) {
+              pageWordMap[word].push(i + 1 - SKIP_PAGES);
+            }
+          }
+        }
+
+        let output = '';
+        for (const word of words) {
+          const ranges = mergeIntoRanges(pageWordMap[word]);
+          if (ranges.length > 0) {
+            output += `${word} p.${ranges.join(', ')}\n`;
+          }
+        }
+        resultsDiv.textContent = output || 'No matches found.';
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+  </script>
+</body>
+</html>
