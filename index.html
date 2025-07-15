@@ -160,6 +160,11 @@
     </div>
     
     <div class="form-group">
+      <label for="pagesToIgnore">Pages to Ignore</label>
+      <textarea id="pagesToIgnore" rows="2" placeholder="Enter page numbers to ignore, separated by commas (e.g., 1,2,3,15-20)..."></textarea>
+    </div>
+    
+    <div class="form-group">
       <div class="settings-row">
         <div class="settings-group">
           <label for="skipPages">Skip Pages (Where does page 1 start?)</label>
@@ -198,9 +203,33 @@
       return ranges;
     }
 
+    function parsePageNumbers(pageString) {
+      const pages = new Set();
+      if (!pageString.trim()) return pages;
+      
+      const parts = pageString.split(',').map(p => p.trim());
+      for (const part of parts) {
+        if (part.includes('-')) {
+          const [start, end] = part.split('-').map(n => parseInt(n.trim()));
+          if (!isNaN(start) && !isNaN(end)) {
+            for (let i = start; i <= end; i++) {
+              pages.add(i);
+            }
+          }
+        } else {
+          const num = parseInt(part);
+          if (!isNaN(num)) {
+            pages.add(num);
+          }
+        }
+      }
+      return pages;
+    }
+
     async function processPDF() {
       const fileInput = document.getElementById('pdfFile');
       const searchWordsInput = document.getElementById('searchWords');
+      const pagesToIgnoreInput = document.getElementById('pagesToIgnore');
       const skipPagesInput = document.getElementById('skipPages');
       const maxResultsInput = document.getElementById('maxResults');
       const resultsDiv = document.getElementById('results');
@@ -210,6 +239,7 @@
 
       const file = fileInput.files[0];
       const words = searchWordsInput.value.split(',').map(w => w.trim().toLowerCase()).filter(Boolean);
+      const pagesToIgnore = parsePageNumbers(pagesToIgnoreInput.value);
       const skipPages = parseInt(skipPagesInput.value) || 0;
       const maxResults = parseInt(maxResultsInput.value) || 40;
 
@@ -224,13 +254,18 @@
         for (let i = skipPages; i < pdf.numPages; i++) {
           if (Object.values(pageWordMap).flat().length >= maxResults) break;
 
-          const page = await pdf.getPage(i + 1);
+          const actualPageNumber = i + 1;
+          const adjustedPageNumber = actualPageNumber - skipPages;
+          
+          if (pagesToIgnore.has(adjustedPageNumber)) continue;
+
+          const page = await pdf.getPage(actualPageNumber);
           const textContent = await page.getTextContent();
           const text = textContent.items.map(item => item.str).join(' ').toLowerCase();
 
           for (const word of words) {
             if (text.includes(word)) {
-              pageWordMap[word].push(i + 1 - skipPages);
+              pageWordMap[word].push(adjustedPageNumber);
             }
           }
         }
