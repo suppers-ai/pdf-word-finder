@@ -103,6 +103,21 @@
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
     }
     
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      font-weight: 500;
+      color: #374151;
+    }
+    
+    .checkbox-label input[type=checkbox] {
+      width: auto;
+      margin: 0;
+      cursor: pointer;
+    }
+    
     button {
       width: 100%;
       padding: 0.875rem 1.5rem;
@@ -178,6 +193,13 @@
     </div>
     
     <div class="form-group">
+      <label class="checkbox-label">
+        <input type="checkbox" id="compactRanges">
+        <span>Use compact ranges (e.g., "166-8" instead of "166-168")</span>
+      </label>
+    </div>
+    
+    <div class="form-group">
       <button onclick="processPDF()">Search PDF</button>
     </div>
     
@@ -186,7 +208,7 @@
 
   <script>
 
-    function mergeIntoRanges(pages) {
+    function mergeIntoRanges(pages, compact = false) {
       if (!pages.length) return [];
       // Ensure all pages are numbers
       const numericPages = pages.map(p => parseInt(p, 10));
@@ -197,11 +219,47 @@
         if (numericPages[i] === end + 1) {
           end = numericPages[i];
         } else {
-          ranges.push(start === end ? `${start}` : `${start}-${end}`);
+          if (compact && start !== end) {
+            // Compact format: show only the different digits
+            const startStr = start.toString();
+            const endStr = end.toString();
+            let commonPrefix = '';
+            for (let j = 0; j < Math.min(startStr.length, endStr.length); j++) {
+              if (startStr[j] === endStr[j]) {
+                commonPrefix += startStr[j];
+              } else {
+                break;
+              }
+            }
+            const startSuffix = startStr.slice(commonPrefix.length);
+            const endSuffix = endStr.slice(commonPrefix.length);
+            ranges.push(`${start}-${endSuffix}`);
+          } else {
+            ranges.push(start === end ? `${start}` : `${start}-${end}`);
+          }
           start = end = numericPages[i];
         }
       }
-      ranges.push(start === end ? `${start}` : `${start}-${end}`);
+      
+      // Handle the last range
+      if (compact && start !== end) {
+        const startStr = start.toString();
+        const endStr = end.toString();
+        let commonPrefix = '';
+        for (let j = 0; j < Math.min(startStr.length, endStr.length); j++) {
+          if (startStr[j] === endStr[j]) {
+            commonPrefix += startStr[j];
+          } else {
+            break;
+          }
+        }
+        const startSuffix = startStr.slice(commonPrefix.length);
+        const endSuffix = endStr.slice(commonPrefix.length);
+        ranges.push(`${start}-${endSuffix}`);
+      } else {
+        ranges.push(start === end ? `${start}` : `${start}-${end}`);
+      }
+      
       return ranges;
     }
 
@@ -277,8 +335,9 @@
         }
 
         let output = '';
+        const compactRanges = document.getElementById('compactRanges').checked;
         for (const word of words) {
-          const ranges = mergeIntoRanges(pageWordMap[word]);
+          const ranges = mergeIntoRanges(pageWordMap[word], compactRanges);
           const totalCount = wordCounts[word];
           
           if (ranges.length > 0) {
