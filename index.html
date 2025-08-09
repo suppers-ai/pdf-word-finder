@@ -188,15 +188,17 @@
 
     function mergeIntoRanges(pages) {
       if (!pages.length) return [];
-      pages.sort((a, b) => a - b);
+      // Ensure all pages are numbers
+      const numericPages = pages.map(p => parseInt(p, 10));
+      numericPages.sort((a, b) => a - b);
       const ranges = [];
-      let start = pages[0], end = pages[0];
-      for (let i = 1; i < pages.length; i++) {
-        if (pages[i] === end + 1) {
-          end = pages[i];
+      let start = numericPages[0], end = numericPages[0];
+      for (let i = 1; i < numericPages.length; i++) {
+        if (numericPages[i] === end + 1) {
+          end = numericPages[i];
         } else {
           ranges.push(start === end ? `${start}` : `${start}-${end}`);
-          start = end = pages[i];
+          start = end = numericPages[i];
         }
       }
       ranges.push(start === end ? `${start}` : `${start}-${end}`);
